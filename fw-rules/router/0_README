@@ -1,0 +1,34 @@
+#
+# This config is somehow very different, it is the one I use at home
+# on my personal server that runs both as a router and as OpenVZ hypervisor
+
+# 
+# They is no zone, and I only attach my VMs from the internal network (eth1)
+# and they are not visible from Internet. Which explain the lack of CreateApp
+
+# Note: that for such a simple configuration, a basic firewall would probably
+# be more simple to use. On the other hand if you already have other virtualized
+# firewall in place, you might want to reuse the same one everywhere.
+
+#
+# ===========================================================================
+#
+#    ------------------------------------------------------------------
+#    -                        internet
+#    ------------------------------------------------------------------
+#            [VPN]                      [Nat+Dnat]   
+#              |                             |       
+#       (tun0   10.10.95.14)             eth0=dhcp
+#         Admin Network                Home aDSL IP 
+#              |                             |
+#     ---------+--------------Routing----------------+-------------
+#        |                                   |          
+#        |                       (venet0 network=10.0.0.0/8)
+#        |                                   |  
+#   (eth1=10.10.11.1)                    (zFulup)   
+#   ---------------                 +----------------+
+#   My home network                 |                |
+#                               10.0.0.2         10.0.0.3 
+#                                vm-02              vm-03 
+# ===========================================================================
+#

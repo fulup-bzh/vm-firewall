@@ -1,0 +1,38 @@
+#
+# ============= Two Zones Two, Internet IP, One Nic =================
+#
+#    ----- Internet --- simulation 10.10.11.0 ---------------
+#              |                               |
+#    Your ISP FIX Internet IP          Your Test Machine
+#       (eth0   10.10.11.5)               (10.10.11.6)
+#       (eth0:1 10.10.11.6)
+#              |
+#              -------------------------
+#         (zone-A)                  (Zone-B)
+#    xen-br0(10.0.12.1)        xen-br1(10.10.13.1)1
+#    +-------------+           +------------------+
+#    |             |           |                  |
+# 10.10.12.4    10.10.12.5  10.10.13.2        Other VM
+# Xen-ZA-One     Xen-ZA-Two  Xen-ZA-One
+#
+#  This sample is designed for test only, and simulate Internet
+#  on your local network. It does not integrated VPN
+#  and admin is done true basic ssh dnat port dnating.
+#  Each VM can obvisouly accessing Internet. For Admin:
+#     ssh -p  22 root@dom0  (connect dom0)
+#     ssh -p  23 root@dom0  (connect Xen-ZA-One)
+#     ssh -p  24 root@dom0  (connect Xen-ZA-Two)
+#     ssh -p 222 root@dom0 (connect Xen-ZB-one) 
+#
+# Exercise: (few things you should test, before moving to next level)
+#   1) connect on XEN-one through SSH from 10.10.10.6
+#   2) open FTP on DOM0 and make it accessible from every VM but not from Internet
+#   3) make outgoing packet from zone one to appear as comming from 10.10.11.5
+#      while packet from zone2 appear as 10.10.11.6
+#   4) prevent/allow both zones to talk together 
+#   etc ....
+
+# Note: This model is the one you MUST use is you have one than
+# one external IP address. For real production you probably want
+# a VPN (see vpn sample)
+

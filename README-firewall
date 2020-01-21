@@ -1,0 +1,60 @@
+
+This Firewall implements Fridu-Virtualization security model
+------------------------------------------------------------
+
+  Doc:  http://web.archive.org/web/20120815124643/http://www.fridu.org/hosting/79-virtualization-firewall  
+  Author: Fulup Ar Foll (Adapted from OpenWRT)
+  Warning: This work is not maintained anymore, you may want to use firewalld in replacement.
+
+Dependencies :
+--------------
+This script only runs with BASH it will fail with ash :(
+
+- OpenVZ: none
+- VirtualBox: none
+- XEN  Fridu-aXen-network.script (http://www.fridu.org/content/view/50/80/)
+
+Installation
+------------
+ ./install.sh template=rules-dir [sysconf=/etc/rules-dir bindir=/usr/sbin]
+ ex: ./install.sh template=sample-step1
+
+Note: install.sh will create link for:
+      Fridu-firewall command line
+      /etc/init.d/Fridu-firewall script
+
+Default config rule can be forced automatically
+     Debian/Ubuntu:     FWCONFIG in /etc/default/Fridu-default
+     OpenSuSE/Redhat:  FWCONFIG in /etc/sysconfig/Fridu-default
+
+Config
+------
+ documentation http://www.fridu.org/fulup-posts/40-hosting-a-sysadmin/79-virtualization-firewall
+ sample config directories fw-rules/*
+
+Usage and Syntaxes.
+-------------------
+
+Check Config
+  * Display rules tables as understood by firewall script.
+    - ./Fridu-Firewall.script display [config=rules-dir]
+  * Dump ip table rules in a file without starting
+    - ./Fridu-Firewall.script start dummy=1 dump=firewall.dumpfile
+
+Try firewall
+  * start firewall and stop it after 180s
+  - ./Fridu-Firewall.script test timeout=180 [config=rules-dir]
+
+Start Firewall
+  * Start Firewall in Verbose Mode.
+    - ./Fridu-Firewall.script start verbose=1 [config=rules-dir]
+  * Start and Dump Rules in a File (typical debuging case)
+    - ./Fridu-Firewall.script start verbose=1 dump=dumpfile [config=rules-dir]
+
+Stop Firewall
+  * Stop Firewall (open everything and allow routing)
+    - ./Fridu-Firewall.script stop
+
+Debug Firewall
+  * Replay generated rules in debug mode
+    - sh -x firewall.dumpfile

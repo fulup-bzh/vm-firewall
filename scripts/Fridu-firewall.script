@@ -1,0 +1,519 @@
+#!/usr/bin/env bash
+
+# Object: Firewall for Fridu Xen "ISP in a Box" Architecture
+# Target: Provide firewall per zone with private NAT for each zone
+# Config: External file firewall.user 
+# Doc:    http://www.fridu.org/fulup-posts/40-hosting-a-sysadmin/79-virtualization-firewall
+# Author: Fulup Ar Foll (adapted from OpenWRT)
+
+# Modification history
+# --------------------
+# 05-dec-2008 changed default config logic
+# 17-nov-2008 moved to multi file config
+# 05-aug-2007 written
+
+# 
+# Where to search for default config
+FRIDU_BASE=/etc/Fridu-Config/VM-Firewall
+
+unset LANG   ;# make sure local language does not create troubles.
+
+Debug()
+{
+ if test "$debug" = 1
+ then
+   echo "Debug: $*"
+ fi
+}
+
+DoIt ()
+{
+  Debug "DoIt $*"
+  if test "$dump" != ""
+  then
+    TAB=`echo $1 | cut -d' ' -f1`
+    if test "$TAB" = "##"  ; then 
+        echo "" >> $dump
+    fi
+    echo "$*" >> $dump
+  fi
+    
+  # echo DoIt $@
+  if test "$dummy" != "1"
+  then
+    eval $*
+    if test $? -ne 0
+    then
+      echo "-- ERR $*"
+    fi
+  fi
+}
+
+# Eval arguments, remove '-' char is prefix set
+EvalArgs()
+{
+
+  for ARG in "$@"
+  do
+    arg=`echo $ARG | tr -d -`
+    if expr 'index' "$arg" '=' '>' '1' >/dev/null
+    then
+      case "$prefix" in
+      1)
+         eval "${NAME}_${arg}"
+         if test $? != 0
+         then
+            echo "ERROR: ${NAME}_${arg} contains special character [$@]"
+         fi
+        ;;
+      2)
+         eval "${PREFIX}${NAME}_${arg}"
+         if test $? != 0
+         then
+            echo "ERROR: ${NAME}_${arg} contains special character [$@]"
+         fi
+        ;;
+      *)
+        eval "${ARG}"
+        if test $? != 0
+        then
+           echo "ERROR: ${arg} contains special character [$@]"
+        fi
+        ;;
+      esac
+    fi
+  done
+  prefix=0
+}
+
+
+Verbose() {
+
+  LABEL="$1" ;
+  if test "$verbose" = 1
+  then
+    printf "Verbose -- %-20s: " "$LABEL"
+    shift; echo $*
+  fi
+}
+# Store zone inside a global variable
+CreateZone()
+{
+  Debug CreateZone $*
+
+  EvalArgs "prefix=1 $@"
+
+  ZONES+="${NAME} "
+  eval VALUE=\$${NAME} 
+  if test "${VALUE}" = "exist"
+  then
+    echo "   WARNING: ZONES=${NAME} first definition overloaded"
+  fi
+  eval ${NAME}=exist
+}
+
+# Store zone inside a global variable
+CreateApp()
+{
+  Debug CreateApp $*
+
+  EvalArgs "prefix=2 $@"
+  APPS+="${PREFIX}${NAME} "
+
+  eval VALUE=\$${PREFIX}${NAME} 
+  if test "${VALUE}" = "exist"
+  then
+    echo "   WARNING: APPS=${PREFIX}${NAME} first definition overloaded"
+  fi
+  eval ${PREFIX}${NAME}=exist
+}
+TuneZone()
+{
+  Debug TuneZone $*
+
+  EvalArgs "prefix=1 $@"
+  TUNES+="${NAME} "
+
+  eval "VALUE=\$${NAME}_ZONE"
+  eval "EXIST=\$${VALUE}"
+  if test "$EXIST" != "exist"
+  then
+    printf "Error: TuneZone  ZONE=%-5s not found [%s]\n" "$ZONE" "$*"
+  fi
+
+}
+
+DeleteChains()
+{
+  EvalArgs "$@"
+
+  # retreive zone value from table
+  for SLOT in NIC EXT BR INT MASK
+  do
+   eval "SLOT=\$${ZONE}_${SLOT}"
+  done
+
+  # make sure we start with clean tables
+  for SLOT in filter:input filter:output filter:forwarding nat:prerouting nat:postrouting filter:brforward
+  do
+   TABLE=`echo $SLOT | cut -d: -f1`
+   CHAIN=`echo $SLOT | cut -d: -f2`
+   DoIt iptables -t $TABLE -F $ZONE-$CHAIN '2>/dev/null'     ;# empty chain
+  done
+
+}
+
+CreateChains()
+{
+  EvalArgs "$@"
+
+  DoIt "# -- Starting ZONE=$ZONE --"
+  # retreive zone value from table
+  for SLOT in NIC EXT BR INT MASK
+  do
+   eval "$SLOT=\$${ZONE}_${SLOT}"
+  done
+  Debug CreateChain ZONE=$ZONE NIC=$NIC EXT=$EXT BR=$BR MASL=$MASK
+
+  # make sure we start with clean tables
+  for SLOT in filter:input filter:output filter:forwarding nat:prerouting nat:postrouting filter:brforward
+  do
+   TABLE=`echo $SLOT | cut -d: -f1`
+   CHAIN=`echo $SLOT | cut -d: -f2`
+   DoIt iptables -t $TABLE -N $ZONE-$CHAIN   ;# create chain
+  done
+
+  if test "$ZONE" != "none"  ;then
+   if test "$NIC" != "none" ; then
+    DoIt iptables -t nat -A $ZONE-postrouting -o $NIC --source $INT/$MASK -j SNAT --to $EXT
+   fi
+    DoIt iptables -t filter -A $ZONE-input -i $BR -j ACCEPT
+    DoIt iptables -t filter -A $ZONE-brforward -i $BR  -o $NIC -j ACCEPT
+    DoIt iptables -t filter -A $ZONE-brforward -i $NIC -o $BR  -j ACCEPT
+    DoIt iptables -t filter -A $ZONE-brforward -i $BR  -o $BR  -j ACCEPT
+  fi
+
+}
+
+CloseChains()
+{
+  EvalArgs "$@"
+
+  # retreive zone value from table
+  for SLOT in NIC EXT BR INT MASK
+  do
+   eval "$SLOT=\$${ZONE}_${SLOT}"
+  done
+  Debug CloseChain ZONE=$ZONE NIC=$NIC EXT=$EXT BR=$BR MASL=$MASK
+
+  if test "$NIC" != "none"
+  then
+    # make sure last rule for zone is deny all
+    DoIt iptables -t filter -A $ZONE-input -i $NIC -j DROP
+  fi
+}
+
+CreateRules()
+{
+  EvalArgs "$@"
+
+  Debug CreateRules $*
+
+  # retreive application value from table
+  for SLOT in ZONE EXT INT
+  do
+   eval "$SLOT=\$${APP}_${SLOT}"
+  done
+  Debug CreateRule APP=$APP ZONE=$ZONE EXT=$EXT INT=$INT
+
+  # get zone nic from global table
+  eval "NIC=\$${ZONE}_NIC"
+  eval "ADDR=\$${ZONE}_EXT"
+
+  # extract proto and port from $EXT
+  PROTO=`echo $EXT | cut -d: -f1`
+  PORT=` echo $EXT | cut -d: -f2`
+
+  if test "$PORT" = "any" ; then
+      DEST=""
+  else
+      DEST="--dport $PORT"
+  fi
+
+  if test "$ZONE" != "none"
+  then
+    # accept application packet from external interface
+    DoIt iptables -t filter -A $ZONE-input -i $NIC --destination $ADDR --proto $PROTO $DEST -j ACCEPT 
+
+    # forward packet to inernal VM destination=IP/Port
+    DoIt iptables -t nat -A $ZONE-prerouting -i $NIC --destination $ADDR --proto $PROTO $DEST  -j DNAT --to $INT
+  else
+    # accept application packet from external interface
+    DoIt iptables -t filter -A $ZONE-input -i $INT --proto $PROTO --dport $PORT -j ACCEPT 
+
+  fi
+
+}
+
+TuneRules()
+{
+  EvalArgs "PROC=TuneRules $@"
+  Debug TuneRules $@
+
+  # retreive  NAME=ZB DIR=out RULE=DROP PORT=tcp:25
+  for SLOT in ZONE DIR ACTION PORT SRC
+  do
+   eval "$SLOT=\$${TUNE}_${SLOT}"
+  done
+ 
+  # get zone nic from global table
+  eval "BR=\$${ZONE}_BR"
+
+  # extract proto and port from $EXT
+  PROTO=`echo $PORT | cut -d: -f1`
+  PORT=` echo $PORT | cut -d: -f2`
+
+  Debug TuneRules TUNE=$TUNE ZONE=$ZONE BR=$BR DIR=$DIR PORT=$PORT PROTO=$PROTO ACTION=$ACTION TARGET=$TARGET
+
+  case "$DIR" in
+
+  in)
+    if test "$PORT" = "any" ; then
+      DEST=""
+    else
+      DEST="--dport $PORT"
+    fi
+
+    # accept/deny application packet from external interface
+    DoIt iptables -t filter -A $ZONE-forwarding -i $BR --proto $PROTO $DEST --source $SRC -j $ACTION
+    ;;
+
+  out)
+     # accept/lock application packet from internal VM
+    DoIt iptables -t filter -A $ZONE-forwarding -i $BR --proto $PROTO $DEST -j $ACTION
+    ;;
+
+  *)
+    echo ERROR: TuneRules unknow direction=$DIR $*
+    ;;
+  esac
+
+}
+# Read user config to start firewall
+# ----------------------------------
+fw_start () {
+ EvalArgs "$@"
+ Debug fw_start ZONES=$ZONES
+
+ Verbose CreateChains Creating chains for each zone
+ DoIt "## CreateChains ZONES=none $ZONES"
+ for ZONE in none $ZONES
+ do
+    CreateChains "ZONE=$ZONE"
+ done
+
+ Verbose SetDefaultxxxx Enter Default Chain behaviour
+ SetDefaultInput   $ZONES
+ SetDefaultOutput  $ZONES
+ SetDefaultForward $ZONES
+ 
+ Verbose CreateRules Enter applications rules in chains
+ DoIt "## CreateApps APPS=$APPS"
+ for APP in $APPS
+ do
+    CreateRules APP=$APP
+ done
+
+ Verbose TuneRules Tune chains each zone
+ DoIt "## TuneZones ZONES=$ZONES"
+ for TUNE in $TUNES
+ do
+    TuneRules TUNE=$TUNE
+ done
+
+ 
+}
+
+fw_stop() 
+{
+ EvalArgs "$@"
+ Debug fw_stop ZONES=$ZONES
+
+ ClearAllTables
+ OpenEveryThing
+ ActivateRouting
+}
+
+# Display config
+# --------------
+fw_display()
+{
+  EvalArgs "$@"
+  Debug fw_dump $@
+echo Zones
+echo --------------------------------------------------------------------------------------------------
+printf "| %-20s | %-7s | %-15s | %-7s | %-15s | %-15s |\n" \
+       Zone_NAME Ext_NIC Ext_IP Int_BR Int-IP Int_MASK
+echo --------------------------------------------------------------------------------------------------
+for ZONE in $ZONES
+do
+  printf "| %-20s " $ZONE
+  for SLOT in NIC:7 EXT:15 BR:7 INT:15 MASK:15
+  do
+   PRM=`echo $SLOT | cut -d: -f1`
+   FMT=`echo $SLOT | cut -d: -f2`
+   eval "VALUE=\$${ZONE}_${PRM}"
+   printf "| %-${FMT}s " ${VALUE} 
+  done
+   printf "|\n"
+done
+echo --------------------------------------------------------------------------------------------------
+echo ""
+echo Applications
+echo ------------------------------------------------------------------------------
+printf "| %-20s | %-10s | %-15s | %-20s |\n" \
+       App_NAME Zone Ext-Port/Proto Int-IP:Port
+echo ------------------------------------------------------------------------------
+for APP in $APPS
+do
+  printf "| %-20s " $APP
+  for SLOT in ZONE:10 EXT:15 INT:20 
+  do
+   PRM=`echo $SLOT | cut -d: -f1`
+   FMT=`echo $SLOT | cut -d: -f2`
+   eval "VALUE=\$${APP}_${PRM}"
+   printf "| %-${FMT}s " ${VALUE} 
+  done
+   printf "|\n"
+done
+echo -----------------------------------------------------------------------------
+echo ""
+echo "Zone Tuning (optional)"
+echo ----------------------------------------------------------------------
+printf "| %-20s | %-7s | %-7s | %-10s | %-10s |\n" \
+       Zone_NAME Zone Dir Action Proto:Port
+echo ----------------------------------------------------------------------
+for LABEL in $TUNES
+do
+  printf "| %-20s " $LABEL
+  for SLOT in ZONE:7 DIR:7 ACTION:10 PORT:10 
+  do
+   PRM=`echo $SLOT | cut -d: -f1`
+   FMT=`echo $SLOT | cut -d: -f2`
+   eval "VALUE=\$${LABEL}_${PRM}"
+   printf "| %-${FMT}s " ${VALUE} 
+  done
+   printf "|\n"
+done
+echo ----------------------------------------------------------------------
+}
+
+fw_status()
+{
+  echo not implemented
+  exit 1
+}
+
+
+# --- start main ------------
+# 
+
+FW_COMM=scripts/`basename $0 .script`.common
+
+log='LOG--log-level warning --log-tcp-options --log-ip-options --log-prefix aXenFW'
+CMDPRM="$*"
+ACTION="$1"
+EvalArgs "$@"
+
+if test ! -f $FRIDU_BASE/$FW_COMM ; then
+  echo "ERROR: did not find firewall.common=$FRIDU_BASE/$FW_COMM"
+  echo "       fix FRIDU-BASE=/etc/Fridu/Fridu-Xen-Scripts/firewall"
+  exit 1
+else
+   # Warning:reading this file clear tables if $ACTION=start
+  source $FRIDU_BASE/$FW_COMM
+fi
+
+if test -z "$config"; then
+  test -f /etc/default/Fridu-default   && DEFAULTCONF=/etc/default/Fridu-default
+  test -f /etc/sysconfig/Fridu-default && DEFAULTCONF=/etc/sysconfig/Fridu-default
+  source "$DEFAULTCONF"
+  if test -z "$FWCONFIG"; then
+     echo "ERROR: no FWCONFIG in $DEFAULTCONF [user config=xxxx] option"
+     exit
+  fi
+  config="$FWCONFIG"
+fi
+
+test -e $FRIDU_BASE/fw-rules/$config && config=$FRIDU_BASE/fw-rules/$config
+test -e $FRIDU_BASE/$config && config=$FRIDU_BASE/$config
+test -e $config && config=$config
+
+if test "$config" = ""
+then
+  echo "ERROR: could not find config file"
+  exit 1
+fi
+
+# default test timeout
+timeout=180
+
+if test "$zone" != ""
+then
+ echo "BUG: Per zone=$zone firewall setting not implemented yet !!!"
+ exit 1
+fi
+
+if test ! -e $config
+then
+    echo "ERROR: Firewall config=$config not found"
+    exit 1
+else
+    DoIt '## UserCustomRules'
+    if test -d $config
+    then
+      for RULES in $config/*.conf
+      do 
+       if test "$RULES" = "/*.conf"
+       then
+          echo "ERROR: config=$config empty !!!"
+          exit 1
+       fi
+       Verbose ReadingConfig User config file=$RULES
+       PREFIX=`basename $RULES .conf | tr -d [:punct:]`_
+       source $RULES
+      done
+    else
+      source $config
+    fi
+fi
+
+case "$1" in
+    start)
+        fw_start 
+        ;;
+
+    test)
+        (echo "Firewall will be stopped in ${timeout}s";
+         sleep $timeout; $0 stop;
+         echo "Firewall stopped")&
+        fw_start
+        ;;
+
+    stop)
+        fw_stop
+        ;;
+
+    display)
+        fw_display 
+        ;;
+
+    status)
+        fw_status 
+        ;;
+
+    *)
+        echo "ERROR syntax: $0 start|stop|display config=MyFirewall.config [dump=outputfile verbose=1]" >&2
+        exit 1
+esac
+

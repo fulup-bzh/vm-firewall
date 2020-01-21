@@ -1,0 +1,21 @@
+#
+# ==================(eth0)=======================================
+#                      |         
+#    ------Routing-----------------------------------
+#             |                                |
+#    (snat:PUBLIC-ADDR-1)            (snat:PUBLIC-ADDR-2)
+#             |                                |
+#          (zONE)                          (zTWO)
+#     vbox-br1(10.0.1.1)               vbox-br2 (10.0.2.1)
+#     +----------------+              +------------------+
+#     |                |              |                  |
+#  10.0.1.2       10.0.1.3        10.10.2.2           10.10.2.3
+#   vbox-12          vbox-13        vbox-22             vbox-23
+# ===============================================================
+#
+
+# Fridu-firewall parse any *.conf file
+
+zones.conf  [contains zones]
+vm*.conf    [contains per vm rules]
+tuning.conf [some extra rules for creating virtualbox bridge]

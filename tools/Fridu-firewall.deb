@@ -1,0 +1,56 @@
+#! /bin/sh
+#
+# /etc/init.d/Fridu-firewall
+#
+### BEGIN INIT INFO
+# Provides: Fridu-firewall
+# Should-Start: $ALL
+# Required-Stop: $local_fs
+# X-UnitedLinux-Should-Stop: 
+# Default-Start: 2 3 4 5
+# Default-Stop: 0 1 6
+# Short-Description: Fridu-firewall implement Fridu Zone security model
+# Description: Fridu-firewall 
+### END INIT INFO
+
+FRIDUFW="/usr/sbin/Fridu-firewall"
+
+if test -f /etc/default/Fridu-default; then
+. /etc/default/Fridu-default
+fi
+
+test -x $FRIDUFW || exit 5
+
+. /lib/lsb/init-functions
+
+case "$1" in
+    start)
+	echo -n "Starting Fridu Firewall "
+	$FRIDUFW start config=$FWCONFIG
+	log_action_end_msg $?
+	;;
+    stop)
+	echo -n "Shutting Fridu Firewall "
+	$FRIDUFW  stop
+        log_action_end_msg $?
+	;;
+    restart)
+	$0 start
+	;;
+    status)
+	echo -n "Checking the status of Fridu Firewall "
+	iptables -nL before-input >/dev/null 2>&1 || rc_failed 3
+        if test $? -eq 0; then
+	   echo ON
+	else
+	   echo OFF
+	fi
+	;;
+    *)
+	echo "Usage: $0 {start|stop|status|restart}"
+	exit 1
+	;;
+esac
+
+# Set exit status
+

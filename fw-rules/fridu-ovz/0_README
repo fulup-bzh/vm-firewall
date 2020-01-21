@@ -1,0 +1,18 @@
+#
+# Object: Firewall config for fridu at OVH
+# Author: Fulup Ar Foll 
+# Date:   18-jul-2008
+# Doc:    http://www.fridu.org
+#
+# Modification history
+# ---------------------
+# 02,18-juy-2008, update for openvz
+
+# Warning this is Fridu.org config, it is probaly to complex for you
+# I recommend to start by sample-stepX config
+# http://www.fridu.org/fulup-samples-a-debug/86-vm-firewall-sample-debug
+
+zones.conf  [contains zones]
+vm*.conf    [contains per vm rules]
+tuning.conf [some extra rules for my VPN that your probably do not need]
+

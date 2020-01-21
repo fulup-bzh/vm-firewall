@@ -1,0 +1,20 @@
+29-jan-2014
+1) Corrected outfile when using
+    Fridu-firewall  start  dump=/tmp/outputfile
+    Now /tmp/outputfile can be exécuted with "sh -x /tmp/outputfile" for debug purpose
+
+25-dec-2008: Thank to "Murat, Netherland" review
+
+1) Removed useless ICMP rules from OUTPUT chain.
+2) Added LOG and ICMP special rules in fw-rules/sample-log
+
+05-dec-2008: 
+
+1) Change default beaviour now Default is set by FWCONFIG in:
+   /etc/default/Fridu-default   (debian, ubuntu)
+   /etc/sysconfig/Fridu-default (OpenSUSE, RedHat, ...)
+
+2) When starting firewall with no default template, or with a wrong one
+   exist before setting any filtering rules (old version will close
+   everything). Preventing you to even fix the error by SSH (hoop !!!)
+   

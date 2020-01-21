@@ -1,0 +1,166 @@
+# 
+# Object: Firewall for Fridu Xen "ISP in a Box" Architecture
+# Target: Provide firewall per zone with private NAT for each zone
+# Author: Fulup Ar Foll (adapted from OpenWRT)
+# Version: 03-aug-2007
+#
+# 
+# Common part provide generic firewall bootstrap command.
+# It is included from Fridu-aXen-firewall.script
+# right just after config read and before user config application.
+
+
+ClearAllTables () {
+  Verbose ClearAllTables Cleaning All Tables
+  DoIt '## ClearAllTables' 
+  DoIt iptables -F
+  DoIt iptables -X
+  DoIt iptables -t nat -F
+  DoIt iptables -t nat -X
+  DoIt iptables -t mangle -F
+  DoIt iptables -t mangle -X
+}
+
+OpenEveryThing () {
+  Verbose OpenEverything Opening all Chains
+  DoIt '## OpenEverything' 
+  DoIt iptables -P INPUT ACCEPT
+  DoIt iptables -P OUTPUT ACCEPT
+  DoIt iptables -P FORWARD ACCEPT
+}
+
+ActivateRouting () {
+  Verbose ActivateRouting Activating Routing
+  DoIt '## Activating routing'
+  DoIt echo '1' '> /proc/sys/net/ipv4/ip_forward'
+}
+
+StopRouting () {
+  DoIt # Stop Routing
+  DoIt echo '0' '> /proc/sys/net/ipv4/ip_forward'
+}
+
+CreateAfterBefore () {
+  Verbose CreateAfterBefore Creating After/Before Chains.
+  DoIt "# -- Starting After -- Before Chains --"
+  for TABLE in \
+          before-input      after-input    \
+          before-output     after-output    \
+          before-forwarding after-forwarding
+  do
+    DoIt iptables -t filter -N $TABLE
+  done
+}
+
+SetDefaultInput() {
+  ZONES="$*"
+  Verbose SetDefaultInput adding zone-input before $ZONE after
+
+  DoIt "## SetDefaultInput to Drop ZONES=none $ZONES"
+  DoIt iptables -P INPUT DROP
+  DoIt iptables -A INPUT -m state --state INVALID -j DROP
+  DoIt iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+  DoIt iptables -A INPUT -p tcp --tcp-flags SYN SYN \! --tcp-option  2 -j  DROP
+
+  #
+  # insert accept rule or to jump to new accept-check table here
+  #
+  DoIt iptables -A INPUT -j before-input
+  for ZONE in none $ZONES
+  do
+     DoIt iptables -A INPUT -j $ZONE-input
+  done
+  DoIt iptables -A INPUT -j after-input
+ 
+  DoIt iptables -A INPUT -i lo	  -j ACCEPT	# allow from loopback interface
+  DoIt iptables -A INPUT -p icmp  -j ACCEPT	# allow ICMP
+  # DoIt iptables -A INPUT -p gre	  -j ACCEPT	# allow GRE
+
+  # reject (what to do with anything not allowed earlier)
+  DoIt iptables -A INPUT -p tcp -j REJECT --reject-with tcp-reset
+  DoIt iptables -A INPUT -j REJECT --reject-with icmp-port-unreachable
+
+  Debug SetDefaultInput Done
+}
+
+SetDefaultOutput() {
+  ZONES="$*"
+  Verbose SetDefaultInput adding zone-input before $ZONE after
+
+  # 
+  DoIt "## SetDefaultOutput to Accept ZONES=$ZONES"
+  DoIt iptables -P OUTPUT DROP
+  DoIt iptables -A OUTPUT -m state --state INVALID -j DROP
+  DoIt iptables -A OUTPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+  #
+  # insert accept rule or to jump to new accept-check table here
+  #
+  #
+  iptables -A OUTPUT -j before-output
+  for ZONE in $ZONES
+  do
+     iptables -A OUTPUT -j $ZONE-output
+  done 
+  iptables -A OUTPUT -j after-output
+
+  # reject (what to do with anything not allowed earlier)
+  DoIt iptables -A OUTPUT -j ACCEPT		#allow everything out
+}
+
+SetDefaultForward () {
+  ZONES="$*"
+  Verbose SetDefaultForward adding zone-forwarding before $ZONE after
+
+  DoIt "## SetDefaultForward to Accept ZONES=$ZONES"
+  DoIt iptables -P FORWARD DROP 
+  DoIt iptables -A FORWARD -m state --state INVALID -j DROP
+  DoIt iptables -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+  DoIt iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+  #
+  # insert accept rule or to jump to new accept-check table here
+  #
+  #
+  DoIt iptables -t filter -A FORWARD -j before-forwarding
+  for ZONE in $ZONES
+  do
+     DoIt iptables -A FORWARD -j $ZONE-forwarding
+     DoIt iptables -t nat -A PREROUTING -j $ZONE-prerouting
+     DoIt iptables -t nat -A POSTROUTING -j $ZONE-postrouting
+  done
+  DoIt iptables -t filter -A FORWARD -j after-forwarding
+
+  # Last default behaviour is to allow zone to route on external NIC
+  for ZONE in $ZONES ;do
+     DoIt iptables -A FORWARD -j $ZONE-brforward
+  done
+
+  ActivateRouting
+}
+
+if test "$dump" != ""
+then
+  Verbose DumpingFules iptables rules dumpfile=$dump
+  echo "# -------------------------------------" > $dump
+  echo "# \"Fridu in aXen\" iptable dump"        >> $dump
+  echo "# date=`date`"                          >> $dump
+  echo "# hostname=$HOSTNAME"                    >> $dump
+  echo "# -------------------------------------" >> $dump
+  if test $? -ne 0
+  then
+    echo ERROR: fail to dump rule on file=$dump
+    exit 1
+  fi
+fi
+
+
+# --- Builting
+if test "$ACTION" = "start" ; then
+   ClearAllTables         ;# start with something clean
+   CreateAfterBefore      ;# Need those chain at config file read time
+fi
+if test "$ACTION" = "test" ; then
+   ClearAllTables         ;# start with something clean
+   CreateAfterBefore      ;# Need those chain at config file read time
+fi

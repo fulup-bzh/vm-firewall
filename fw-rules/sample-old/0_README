@@ -1,0 +1,11 @@
+# 
+# Having full firewall config within one unique file is not recommended
+# ---------------------------------------------------------------------
+
+ When possible you should choose a multi-file template, nevertehess if
+ requirered you may use a unique file, if named fw-rules/default.conf
+ it will have the precedence on fw-rules/default directory.
+
+ Samples from this directory where design for earlier version of VM-firewall.
+
+ Fulup

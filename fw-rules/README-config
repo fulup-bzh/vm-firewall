@@ -1,0 +1,33 @@
+# ----------------------------------------------------
+# config are selected by config=xxxx in commande line
+# ----------------------------------------------------
+
+# config=XXXX search path 
+# ------------------------
+  1) use XXXX as a full path
+  2) use XXXX as $FRIDU_BASE/XXXX
+  3) use XXXX as $FRIDU_BASE/fw-rules/XXXX
+  Note: if "config" is not set default is config=default
+
+Config=XXXX.directory 
+----------------------
+ Fridu-firewall will read every XXXX.dir/*.conf
+ ./scripts/Fridu-firewall.script display config=fw-rules/openvz
+
+Config=XXXX.file 
+-----------------
+ Fridu-firewall will read every only XXXX.file
+ ex: ./scripts/Fridu-firewall.script display config=fw-rules/samples/Fridu-firewall-Guru.config
+
+Note: 
+-----
+ * order in which config chunk are read has not importante
+ * alway use "display" to make sure your config is what you think
+ * when ready start with "test" and not start (especially on remote server)
+
+Warning:
+--------
+ * Fridu-Firewall is written in "bash" and has very few grammar check
+ * A wrong config will produce wrong rules !!!! 
+
+ 
